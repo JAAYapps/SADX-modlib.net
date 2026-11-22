@@ -80,14 +80,35 @@ load_assembly_and_get_function_pointer_fn get_dotnet_load_assembly(const char_t 
     return (load_assembly_and_get_function_pointer_fn)load_assembly_and_get_function_pointer;
 }
 
-typedef int (__cdecl *init_managed_fn)(const char *path);
-typedef int (__cdecl *on_frame_managed_fn)();
+typedef void (__cdecl *init_managed_fn)(const char *path);
+typedef void (__cdecl *on_frame_managed_fn)();
+typedef void (__cdecl *on_init_end_managed_fn)();
+typedef void (__cdecl *on_input_managed_fn)();
+typedef void (__cdecl *on_control_managed_fn)();
+typedef void (__cdecl *on_render_device_reset_managed_fn)();
+typedef void (__cdecl *on_render_device_lost_managed_fn)();
+typedef void (__cdecl *on_render_scene_start_managed_fn)();
+typedef void (__cdecl *on_render_scene_end_managed_fn)();
+typedef void (__cdecl *on_exit_managed_fn)();
+typedef void (__cdecl *load_script_managed_fn)(const char *folder);
 
 namespace
 {
     init_managed_fn managed_init_fptr = nullptr;
     on_frame_managed_fn managed_onFrame_fptr = nullptr;
-
+    on_init_end_managed_fn managed_onInitEnd_fptr = nullptr;
+    on_input_managed_fn managed_onInput_fptr = nullptr;
+    on_control_managed_fn managed_onControl_fptr = nullptr;
+    on_render_device_reset_managed_fn managed_onRenderDeviceReset_fptr = nullptr;
+    on_render_device_lost_managed_fn managed_onRenderDeviceLost_fptr = nullptr;
+    on_render_scene_start_managed_fn managed_onRenderSceneStart_fptr = nullptr;
+    on_render_scene_end_managed_fn managed_onRenderSceneEnd_fptr = nullptr;
+    on_exit_managed_fn managed_onExit_fptr = nullptr;
+    
+    // This is used to load a script on the dotnet side.
+    load_script_managed_fn managed_loadScript_fptr = nullptr;
+    const HelperFunctions *helpers = nullptr;
+    
     // Helper to convert SADX's ANSI/UTF-8 mod folder path into Windows UTF-16 (wchar_t), important for dotnet string since dotnet uses a 16 bit string.
     std::wstring to_wstring(const char *str)
     {
@@ -96,6 +117,28 @@ namespace
         std::wstring wstr(len - 1, L'\0');
         MultiByteToWideChar(CP_UTF8, 0, str, -1, &wstr[0], len);
         return wstr;
+    }
+}
+
+void LoadMethod(load_assembly_and_get_function_pointer_fn load_assembly_and_get_function_pointer, std::wstring assemblyPath, const char_t *dotnet_type_method, void **managed_method)
+{
+    // Load SADXModLib.net.dll and resolve [UnmanagedCallersOnly] method
+    // Format: "<Namespace>.<ClassName>, <AssemblyName>"
+    const char_t *dotnet_type = L"SADXModLib.net.ModLib, SADXModLib.net";
+    
+    int rc = load_assembly_and_get_function_pointer(
+            assemblyPath.c_str(),
+            dotnet_type,
+            dotnet_type_method,
+            UNMANAGEDCALLERSONLY_METHOD, // Required because Init has [UnmanagedCallersOnly]
+            nullptr,
+            managed_method);
+
+    if (rc != 0 || !managed_method)
+    {
+        char_t message[256];
+        wsprintfW(message, L"Failed to get function pointer to ModLib.%s!", dotnet_type_method);
+        MessageBoxW(nullptr, message, L"SADXModLib.net", MB_ICONERROR);
     }
 }
 
@@ -127,59 +170,36 @@ extern "C" {
             MessageBoxA(nullptr, err, "SADXModLib.net", MB_ICONERROR);
             return;
         }
-
-        // Load SADXModLib.net.dll and resolve [UnmanagedCallersOnly] ModLib.Init
-        // Format: "<Namespace>.<ClassName>, <AssemblyName>"
-        const char_t *dotnet_type = L"SADXModLib.net.ModLib, SADXModLib.net";
-        const char_t *dotnet_type_method_Init = L"Init";
-        const char_t *dotnet_type_method_OnFrame = L"OnFrame";
         
-        int rc = load_assembly_and_get_function_pointer(
-            assemblyPath.c_str(),
-            dotnet_type,
-            dotnet_type_method_Init,
-            UNMANAGEDCALLERSONLY_METHOD, // Required because Init has [UnmanagedCallersOnly]
-            nullptr,
-            (void **)&managed_init_fptr);
-
-        rc = load_assembly_and_get_function_pointer(
-            assemblyPath.c_str(),
-            dotnet_type,
-            dotnet_type_method_OnFrame,
-            UNMANAGEDCALLERSONLY_METHOD, // Required because Init has [UnmanagedCallersOnly]
-            nullptr,
-            (void **)&managed_onFrame_fptr);
-
-        if (rc != 0 || !managed_init_fptr)
-        {
-            MessageBoxA(nullptr, "Failed to get function pointer to ModLib.Init!", "SADXModLib.net", MB_ICONERROR);
-            return;
-        }
+        LoadMethod(load_assembly_and_get_function_pointer, assemblyPath, L"Init", (void **)&managed_init_fptr);
+        LoadMethod(load_assembly_and_get_function_pointer, assemblyPath, L"OnFrame", (void **)&managed_onFrame_fptr);
+        LoadMethod(load_assembly_and_get_function_pointer, assemblyPath, L"OnInitEnd", (void **)&managed_onInitEnd_fptr);
+        helpers = &helperFunctions;
+        LoadMethod(load_assembly_and_get_function_pointer, assemblyPath, L"LoadScript", (void **)&managed_loadScript_fptr);
         
-        if (rc != 0 || !managed_onFrame_fptr)
-        {
-            MessageBoxA(nullptr, "Failed to get function pointer to ModLib.OnFrame!", "SADXModLib.net", MB_ICONERROR);
-            return;
-        }
-
-        // Call C# Init(IntPtr path) and verify the return value (34)
-        int result = managed_init_fptr(path);
-
-        char msg[128];
-        wsprintfA(msg, "C# ModLib.Init returned: %d", result);
-        MessageBoxA(nullptr, msg, "SADXModLib.net Hello World", MB_OK);
-        PrintDebug(msg);
+        managed_init_fptr(path);
     }
 
     __declspec(dllexport) void __cdecl OnInitEnd()
     {
         // Executed after every mod has been initialized, mainly used to check if a specific mod is also enabled.
+        // Mods list needs loader version 16 or newer (SADXModInfo.h)
+        if (managed_loadScript_fptr && helpers && helpers->Version >= 16 && helpers->Mods)
+        {
+            const ModList *mods = helpers->Mods;
+            for (int i = 0; i < mods->size(); i++)
+                managed_loadScript_fptr(mods->at(i).Folder); // Loads a mod in the mods folder that uses a csx script file.
+        }
+        
+        if (managed_onInitEnd_fptr)
+            managed_onInitEnd_fptr();
     }
 
     __declspec(dllexport) void __cdecl OnFrame()
     {
         // Executed every running frame of SADX
-        managed_onFrame_fptr();
+        if (managed_onFrame_fptr)
+            managed_onFrame_fptr();
     }
 
     __declspec(dllexport) void __cdecl OnInput()
