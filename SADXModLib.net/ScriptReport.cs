@@ -13,6 +13,7 @@ public static class ScriptReport
     {
         ("SADXModLib.net.ScriptGlobals.",              false, "game events"),
         ("SADXModLib.net.Game.",                       false, "game memory (expected)"),
+        ("SADXModLib.net.Mods.",                       true,  "calls another mod's code"),
         ("System.IO.Path.",                            false, "file names only"),
         ("System.IO.File.ReadAll",                     false, "files: read"),
         ("System.IO.File.ReadLines",                   false, "files: read"),
