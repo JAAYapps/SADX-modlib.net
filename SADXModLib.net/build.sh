@@ -5,6 +5,24 @@ XWIN="$HOME/.local/share/xwin"
 NETHOST="$HOME/.nuget/packages/microsoft.netcore.app.host.win-x86/10.0.11/runtimes/win-x86/native"
 OUT_DIR="bin/Debug/net10.0"
 
+# clangd can't expand $HOME, so write compile_flags.txt with this machine's real paths
+cat > compile_flags.txt <<EOF
+--target=i686-pc-windows-msvc
+-xc++
+-DNETHOST_USE_AS_STATIC
+-fms-extensions
+-fms-compatibility
+-isystem
+$XWIN/crt/include
+-isystem
+$XWIN/sdk/include/ucrt
+-isystem
+$XWIN/sdk/include/um
+-isystem
+$XWIN/sdk/include/shared
+-I$NETHOST
+EOF
+
 dotnet publish SADXModLib.net.csproj -r win-x86 --self-contained false -p:PublishDir=bin/Debug/net10.0/dotnet/
 
 clang++ --target=i686-pc-windows-msvc \
