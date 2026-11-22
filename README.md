@@ -51,11 +51,14 @@ Enable both SADXModLib.net and your script mod in SA Mod Manager. SADXModLib.net
 
 ## What a script can use
 
-| Name | What it is |
-|---|---|
-| `OnFrame += () => { };` | runs your code once every frame |
-| `Game.Rings` | the ring count; read it or set it |
-| `Game.PrintDebug("text\n")` | writes a line to the mod loader log |
+| Name                                                              | What it is                                                              |
+|-------------------------------------------------------------------|-------------------------------------------------------------------------|
+| `OnFrame += () => { };`                                           | runs your code once every frame                                         |
+| `Game.Rings`                                                      | the ring count; read it or set it                                       |
+| `Game.PrintDebug("text\n")`                                       | writes a line to the mod loader log                                     |
+| `Game.DisplayHintText(new[] { "\aLine one\nline two" }, 180)`     | shows the game's hint box; 180 = 3 seconds                              |
+| `Mods.CallInt("sadxtruck.dll", "TruckCharacterDriving")`          | calls another mod's export (int, no inputs); 0 if that mod isn't loaded |
+|-------------------------------------------------------------------|-------------------------------------------------------------------------|
 
 `System`, `System.IO`, `System.Linq` and `SADXModLib.net` are already imported, so a script doesn't need `using` lines for them.
 
@@ -89,15 +92,17 @@ If the script uses something risky, the game asks first:
 
 What counts as risky:
 
-| Shown as | Script uses |
-|---|---|
-| files: write/delete | anything in `System.IO` except reading (reading files, `Path`, and listing folders are fine) |
-| run programs | `System.Diagnostics.Process` |
-| network | `System.Net` |
-| Windows registry | `Microsoft.Win32` |
-| close the game | `Environment.Exit`, `Environment.FailFast` |
-| load hidden code | `System.Reflection`, `System.Runtime.Loader`, `Activator`, `AppDomain`, `Type.Get...`, `Type.InvokeMember`, `dynamic`, `#r` |
-| raw memory / native calls | `System.Runtime.InteropServices`, `System.Runtime.CompilerServices.Unsafe` |
+| Shown as                  | Script uses                                                                                                                 |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| files: write/delete       | anything in `System.IO` except reading (reading files, `Path`, and listing folders are fine)                                |
+| run programs              | `System.Diagnostics.Process`                                                                                                |
+| network                   | `System.Net`                                                                                                                |
+| Windows registry          | `Microsoft.Win32`                                                                                                           |
+| close the game            | `Environment.Exit`, `Environment.FailFast`                                                                                  |
+| load hidden code          | `System.Reflection`, `System.Runtime.Loader`, `Activator`, `AppDomain`, `Type.Get...`, `Type.InvokeMember`, `dynamic`, `#r` |
+| raw memory / native calls | `System.Runtime.InteropServices`, `System.Runtime.CompilerServices.Unsafe`                                                  |
+| calls another mod's code  | `Mods.CallInt`                                                                                                              |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------|
 
 ## This is a check, not a sandbox
 
@@ -112,14 +117,15 @@ Things the check can't see:
 
 Look in the mod loader log for its `[script]` lines:
 
-| Log line | Meaning |
-|---|---|
-| `[script] Ring Test loaded` | it's running |
-| `[script] Ring Test: (9,9): error CS0103: ...` | the script has a mistake; (9,9) is line 9, column 9 |
-| `[script] Ring Test not run, the player said No` | you said No in the box |
-| `[script] Ring Test failed: ...` | it crashed while starting; the rest of the line says why |
-| `[script] Ring Test OnFrame: ...` | its `OnFrame` code crashed; it keeps being called every frame |
-| no `[script]` lines at all | the mod isn't enabled, or the file isn't named `mod.csx` |
+| Log line                                         | Meaning                                                        |
+|--------------------------------------------------|----------------------------------------------------------------|
+| `[script] Ring Test loaded`                      | it's running                                                   |
+| `[script] Ring Test: (9,9): error CS0103: ...`   | the script has a mistake; (9,9) is line 9, column 9            |
+| `[script] Ring Test not run, the player said No` | you said No in the box                                         |
+| `[script] Ring Test failed: ...`                 | it crashed while starting; the rest of the line says why       |
+| `[script] Ring Test OnFrame: ...`                | its `OnFrame` code crashed; it keeps being called every frame  |
+| no `[script]` lines at all                       | the mod isn't enabled, or the file isn't named `mod.csx`       |
+|--------------------------------------------------|----------------------------------------------------------------|
 
 # Credits
 
